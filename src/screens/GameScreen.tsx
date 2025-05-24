@@ -611,7 +611,8 @@ export default function GameScreen({ navigation, route }: Props) {
           category: gameState.category,
           wordsFound: result.wordsFound,
           totalWords: result.totalWords,
-          timeLeft: result.timeLeft
+          timeLeft: result.timeLeft,
+          level: gameState.level
         });
       }
     } else {
@@ -726,7 +727,8 @@ export default function GameScreen({ navigation, route }: Props) {
           category: gameState.category,
           wordsFound: gameState.discoveredWords.length,
           totalWords: gameState.targetWords.length,
-          timeLeft: 0
+          timeLeft: 0,
+          level: gameState.level
         });
       }, 1000);
     }
@@ -847,7 +849,15 @@ export default function GameScreen({ navigation, route }: Props) {
             <Text style={styles.homeButtonText}>⌂</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.categoryText}>Category: {category}</Text>
+            <View style={styles.gameInfoContainer}>
+              <Text style={styles.categoryText}>Category: {category}</Text>
+              <View style={styles.levelContainer}>
+                <Text style={styles.levelText}>Level {gameState.level}</Text>
+                <Text style={styles.levelProgressText}>
+                  {gameState.discoveredWords.length}/{gameState.wordsPerLevel} words
+                </Text>
+              </View>
+            </View>
             <View style={styles.timerContainer}>
               <Animated.Text style={[
                 styles.timerText, 
@@ -987,6 +997,30 @@ const styles = StyleSheet.create({
     fontSize: SIZES.large,
     fontFamily: FONTS.bold,
     color: COLORS.text,
+  },
+  gameInfoContainer: {
+    flex: 1,
+  },
+  levelContainer: {
+    backgroundColor: COLORS.block.purple,
+    paddingHorizontal: SIZES.padding / 2,
+    paddingVertical: SIZES.padding / 4,
+    borderRadius: SIZES.radius / 2,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  levelText: {
+    fontSize: SIZES.medium,
+    fontFamily: FONTS.bold,
+    color: COLORS.background,
+    textAlign: 'center',
+  },
+  levelProgressText: {
+    fontSize: SIZES.small,
+    fontFamily: FONTS.medium,
+    color: COLORS.background,
+    textAlign: 'center',
+    marginTop: 2,
   },
   gameArea: {
     flex: 1,

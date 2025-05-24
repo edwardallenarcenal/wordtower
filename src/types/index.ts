@@ -10,6 +10,7 @@ export type RootStackParamList = {
     wordsFound: number;
     totalWords: number;
     timeLeft: number;
+    level: number;
   };
 };
 
@@ -49,4 +50,6 @@ export interface GameState {
     blocks: Block[];
     isValid: boolean;
   };
+  level: number; // Current level (starts at 1)
+  wordsPerLevel: number; // Number of words for current level
 }

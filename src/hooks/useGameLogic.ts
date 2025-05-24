@@ -8,14 +8,22 @@ audioService.initialize();
 
 const GAME_TIME = 180; // 3 minutes in seconds
 
-const generateBlocks = (category: string): { blocks: Block[], targetWords: string[] } => {
+// Level system configuration
+const getWordsForLevel = (level: number): number => {
+  return Math.min(2 + level, 8); // Start with 3 words (2+1), max 8 words
+};
+
+const generateBlocks = (category: string, level: number = 1): { blocks: Block[], targetWords: string[] } => {
   const categoryData = CATEGORIES[category];
   if (!categoryData) throw new Error(`Category ${category} not found`);
 
-  // Select 3 random words from the category
+  // Calculate number of words for this level
+  const wordCount = getWordsForLevel(level);
+
+  // Select random words from the category
   const selectedWords = [...categoryData.words]
     .sort(() => Math.random() - 0.5)
-    .slice(0, 3)
+    .slice(0, wordCount)
     .map(w => w.word);
 
   // Generate and shuffle blocks from the selected words
@@ -34,7 +42,9 @@ const generateBlocks = (category: string): { blocks: Block[], targetWords: strin
 
 export const useGameLogic = (category: string) => {
   const [gameState, setGameState] = useState<GameState>(() => {
-    const { blocks, targetWords } = generateBlocks(category);
+    const initialLevel = 1;
+    const wordsPerLevel = getWordsForLevel(initialLevel);
+    const { blocks, targetWords } = generateBlocks(category, initialLevel);
     return {
       category,
       targetWords,
@@ -51,6 +61,8 @@ export const useGameLogic = (category: string) => {
         blocks: [],
         isValid: false,
       },
+      level: initialLevel,
+      wordsPerLevel: wordsPerLevel,
     };
   });
 
@@ -83,6 +95,28 @@ export const useGameLogic = (category: string) => {
       }
     };
   }, [gameState.gameStatus]);
+
+  // Level advancement function
+  const advanceToNextLevel = useCallback(() => {
+    const nextLevel = gameState.level + 1;
+    const wordsForNextLevel = getWordsForLevel(nextLevel);
+    const { blocks, targetWords } = generateBlocks(gameState.category, nextLevel);
+    
+    setGameState(prev => ({
+      ...prev,
+      level: nextLevel,
+      wordsPerLevel: wordsForNextLevel,
+      targetWords,
+      discoveredWords: [],
+      availableBlocks: blocks,
+      currentWord: { blocks: [], isValid: false },
+      gameStatus: 'playing',
+      timeRemaining: GAME_TIME, // Reset timer for new level
+    }));
+    
+    console.log(`Advanced to level ${nextLevel} with ${wordsForNextLevel} words`);
+    audioService.playSoundEffect('groupComplete');
+  }, [gameState.level, gameState.category]);
 
   const validateWord = useCallback((blocks: Block[]): { isValid: boolean; message?: string } => {
     const word = blocks.map(b => b.letter).join('').toLowerCase();
@@ -182,7 +216,7 @@ export const useGameLogic = (category: string) => {
           setGameState(prev => {
             try {
               const newDiscoveredWords = [...prev.discoveredWords, word];
-              const isGameFinished = newDiscoveredWords.length === prev.targetWords.length;
+              const isLevelComplete = newDiscoveredWords.length === prev.targetWords.length;
 
               // Update the game state
               const newGameState: GameState = {
@@ -193,7 +227,7 @@ export const useGameLogic = (category: string) => {
                 },
                 discoveredWords: newDiscoveredWords,
                 currentWord: { blocks: [], isValid: false },
-                gameStatus: (isGameFinished ? 'finished' : 'playing') as GameState['gameStatus'],
+                gameStatus: prev.gameStatus, // Keep current status, will handle level advancement separately
                 // Reset the used status of blocks that were in the submitted word
                 availableBlocks: prev.availableBlocks.map(b => 
                   selectedBlockIds.has(b.id)
@@ -217,22 +251,29 @@ export const useGameLogic = (category: string) => {
         return { success: false, message: 'Something went wrong. Please try again.' };
       }
 
-      // Play appropriate sound effect
-      if (newState.gameStatus === 'finished') {
-        audioService.playSoundEffect('gameComplete');
-        audioService.stopBackgroundMusic();
+      // Check if level is complete and handle advancement
+      const isLevelComplete = newState.discoveredWords.length === newState.targetWords.length;
+      
+      if (isLevelComplete) {
+        // Small delay before advancing to next level
+        setTimeout(() => {
+          advanceToNextLevel();
+        }, 1500);
+        audioService.playSoundEffect('groupComplete');
       } else {
         audioService.playSoundEffect('wordComplete');
       }
 
       return {
         success: true,
-        message: 'Word found!',
-        isGameFinished: newState.gameStatus === 'finished',
+        message: isLevelComplete ? `Level ${gameState.level} Complete! Advancing to level ${gameState.level + 1}...` : 'Word found!',
+        isGameFinished: false, // Levels never end the game, only time running out does
+        isLevelComplete,
         player: newState.player,
         wordsFound: newState.discoveredWords.length,
         totalWords: newState.targetWords.length,
-        timeLeft: newState.timeRemaining
+        timeLeft: newState.timeRemaining,
+        level: newState.level
       };
     } catch (error) {
       console.error('Error in submitWord:', error);
@@ -562,6 +603,34 @@ export const useGameLogic = (category: string) => {
     return null; // No hint available
   }, [gameState.availableBlocks, gameState.targetWords, gameState.discoveredWords]);
 
+  const restartGame = useCallback(() => {
+    const initialLevel = 1;
+    const wordsPerLevel = getWordsForLevel(initialLevel);
+    const { blocks, targetWords } = generateBlocks(gameState.category, initialLevel);
+    
+    setGameState({
+      category: gameState.category,
+      targetWords,
+      discoveredWords: [],
+      timeRemaining: GAME_TIME,
+      player: {
+        id: 'player1',
+        name: 'Player',
+        words: [],
+      },
+      availableBlocks: blocks,
+      gameStatus: 'waiting',
+      currentWord: {
+        blocks: [],
+        isValid: false,
+      },
+      level: initialLevel,
+      wordsPerLevel: wordsPerLevel,
+    });
+    
+    console.log('Game restarted at level 1');
+  }, [gameState.category]);
+
   return {
     gameState,
     selectBlock,
@@ -570,6 +639,7 @@ export const useGameLogic = (category: string) => {
     ungroupWord,
     resetWord,
     startGame,
+    restartGame,
     validateWord,
     validateAllGroupedWords,
     checkGameCompletion,

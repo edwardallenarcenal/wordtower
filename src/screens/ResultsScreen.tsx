@@ -13,7 +13,7 @@ type Props = {
 };
 
 export default function ResultsScreen({ navigation, route }: Props) {
-  const { player, category, wordsFound, totalWords, timeLeft } = route.params;
+  const { player, category, wordsFound, totalWords, timeLeft, level } = route.params;
   const isSuccess = wordsFound === totalWords;
 
   useEffect(() => {
@@ -51,6 +51,10 @@ export default function ResultsScreen({ navigation, route }: Props) {
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={[styles.playerCard, isSuccess && styles.winnerCard]}>
             <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Level Reached:</Text>
+                <Text style={styles.statValue}>{level}</Text>
+              </View>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Words Found:</Text>
                 <Text style={styles.statValue}>{wordsFound}/{totalWords}</Text>
