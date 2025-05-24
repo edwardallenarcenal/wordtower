@@ -1,0 +1,52 @@
+export type RootStackParamList = {
+  Home: undefined;
+  Game: {
+    category: string;
+  };
+  Settings: undefined;
+  Results: {
+    player: Player;
+    category: string;
+    wordsFound: number;
+    totalWords: number;
+    timeLeft: number;
+  };
+};
+
+export interface Block {
+  id: string;
+  letter: string;
+  isUsed: boolean;
+  position: {
+    x: number;
+    y: number;
+  };
+}
+
+export interface Word {
+  id: string;
+  word: string;
+  playerId: string;
+  blocks: Block[];
+  isValid: boolean;
+}
+
+export interface Player {
+  id: string;
+  name: string;
+  words: Word[];
+}
+
+export interface GameState {
+  timeRemaining: number; // Time remaining in seconds
+  category: string;
+  targetWords: string[];
+  discoveredWords: string[];
+  player: Player;
+  availableBlocks: Block[];
+  gameStatus: 'waiting' | 'playing' | 'finished';
+  currentWord: {
+    blocks: Block[];
+    isValid: boolean;
+  };
+}
