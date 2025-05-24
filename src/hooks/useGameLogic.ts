@@ -40,9 +40,9 @@ const generateBlocks = (category: string, level: number = 1): { blocks: Block[],
   return { blocks, targetWords: selectedWords };
 };
 
-export const useGameLogic = (category: string) => {
+export const useGameLogic = (category: string, startLevel: number = 1) => {
   const [gameState, setGameState] = useState<GameState>(() => {
-    const initialLevel = 1;
+    const initialLevel = startLevel;
     const wordsPerLevel = getWordsForLevel(initialLevel);
     const { blocks, targetWords } = generateBlocks(category, initialLevel);
     return {
@@ -118,6 +118,28 @@ export const useGameLogic = (category: string) => {
     audioService.playSoundEffect('groupComplete');
   }, [gameState.level, gameState.category]);
 
+  // Function to start next level (called from Results screen)
+  const startNextLevel = useCallback(() => {
+    const nextLevel = gameState.level + 1;
+    const wordsForNextLevel = getWordsForLevel(nextLevel);
+    const { blocks, targetWords } = generateBlocks(gameState.category, nextLevel);
+    
+    setGameState(prev => ({
+      ...prev,
+      level: nextLevel,
+      wordsPerLevel: wordsForNextLevel,
+      targetWords,
+      discoveredWords: [],
+      availableBlocks: blocks,
+      currentWord: { blocks: [], isValid: false },
+      gameStatus: 'playing',
+      timeRemaining: GAME_TIME,
+    }));
+    
+    console.log(`Starting level ${nextLevel} with ${wordsForNextLevel} words`);
+    return nextLevel;
+  }, [gameState.level, gameState.category]);
+
   const validateWord = useCallback((blocks: Block[]): { isValid: boolean; message?: string } => {
     const word = blocks.map(b => b.letter).join('').toLowerCase();
     
@@ -183,7 +205,17 @@ export const useGameLogic = (category: string) => {
     try {
       if (gameState.timeRemaining <= 0) {
         audioService.playSoundEffect('error');
-        return { success: false, message: 'Time is up!' };
+        return { 
+          success: false, 
+          message: 'Time is up!',
+          isGameFinished: false,
+          isLevelComplete: false,
+          player: gameState.player,
+          wordsFound: gameState.discoveredWords.length,
+          totalWords: gameState.targetWords.length,
+          timeLeft: gameState.timeRemaining,
+          level: gameState.level
+        };
       }
 
       // Validate the word
@@ -191,7 +223,17 @@ export const useGameLogic = (category: string) => {
 
       if (!validation.isValid) {
         audioService.playSoundEffect('error');
-        return { success: false, message: validation.message };
+        return { 
+          success: false, 
+          message: validation.message,
+          isGameFinished: false,
+          isLevelComplete: false,
+          player: gameState.player,
+          wordsFound: gameState.discoveredWords.length,
+          totalWords: gameState.targetWords.length,
+          timeLeft: gameState.timeRemaining,
+          level: gameState.level
+        };
       }
 
       // Get the word from the selected blocks
@@ -248,26 +290,42 @@ export const useGameLogic = (category: string) => {
       } catch (error) {
         console.error('Error updating game state:', error);
         audioService.playSoundEffect('error');
-        return { success: false, message: 'Something went wrong. Please try again.' };
+        return { 
+          success: false, 
+          message: 'Something went wrong. Please try again.',
+          isGameFinished: false,
+          isLevelComplete: false,
+          player: gameState.player,
+          wordsFound: gameState.discoveredWords.length,
+          totalWords: gameState.targetWords.length,
+          timeLeft: gameState.timeRemaining,
+          level: gameState.level
+        };
       }
 
       // Check if level is complete and handle advancement
       const isLevelComplete = newState.discoveredWords.length === newState.targetWords.length;
       
+      console.log('=== LEVEL COMPLETION DEBUG ===');
+      console.log('Discovered words:', newState.discoveredWords.length);
+      console.log('Target words:', newState.targetWords.length);
+      console.log('Is level complete?', isLevelComplete);
+      console.log('Current level:', gameState.level);
+      
       if (isLevelComplete) {
-        // Small delay before advancing to next level
-        setTimeout(() => {
-          advanceToNextLevel();
-        }, 1500);
+        // Set game to finished state so it navigates to results
+        newState.gameStatus = 'finished';
         audioService.playSoundEffect('groupComplete');
+        console.log('✅ LEVEL COMPLETE - Setting game to finished state');
       } else {
         audioService.playSoundEffect('wordComplete');
+        console.log('➡️ Word complete, continuing level');
       }
 
       return {
         success: true,
-        message: isLevelComplete ? `Level ${gameState.level} Complete! Advancing to level ${gameState.level + 1}...` : 'Word found!',
-        isGameFinished: false, // Levels never end the game, only time running out does
+        message: isLevelComplete ? `Level ${gameState.level} Complete!` : 'Word found!',
+        isGameFinished: isLevelComplete, // Now finish when level is complete
         isLevelComplete,
         player: newState.player,
         wordsFound: newState.discoveredWords.length,
@@ -278,7 +336,17 @@ export const useGameLogic = (category: string) => {
     } catch (error) {
       console.error('Error in submitWord:', error);
       audioService.playSoundEffect('error');
-      return { success: false, message: 'Something went wrong. Please try again.' };
+      return { 
+        success: false, 
+        message: 'Something went wrong. Please try again.',
+        isGameFinished: false,
+        isLevelComplete: false,
+        player: gameState.player,
+        wordsFound: gameState.discoveredWords.length,
+        totalWords: gameState.targetWords.length,
+        timeLeft: gameState.timeRemaining,
+        level: gameState.level
+      };
     }
   }, [gameState.currentWord.blocks, gameState.player, gameState.discoveredWords, gameState.targetWords.length, validateWord, gameState.timeRemaining]);
 
@@ -304,7 +372,17 @@ export const useGameLogic = (category: string) => {
     try {
       if (gameState.timeRemaining <= 0) {
         audioService.playSoundEffect('error');
-        return { success: false, message: 'Time is up!' };
+        return { 
+          success: false, 
+          message: 'Time is up!',
+          isGameFinished: true,
+          isLevelComplete: false,
+          player: gameState.player,
+          wordsFound: gameState.discoveredWords.length,
+          totalWords: gameState.targetWords.length,
+          timeLeft: 0,
+          level: gameState.level
+        };
       }
 
       // Check if there are blocks selected
@@ -406,10 +484,12 @@ export const useGameLogic = (category: string) => {
             success: true,
             message: `All blocks used! However, some words are incorrect: ${validationResult.invalidWords.join(', ')}. Please fix them to win!`,
             isGameFinished: false,
+            isLevelComplete: false, // Can't complete level with invalid words
             player: newState.player,
             wordsFound: newState.discoveredWords.length,
             totalWords: newState.targetWords.length,
             timeLeft: newState.timeRemaining,
+            level: newState.level,
             needsValidation: true,
             invalidWords: validationResult.invalidWords
           };
@@ -420,10 +500,12 @@ export const useGameLogic = (category: string) => {
             success: true,
             message: 'Congratulations! All words are correct!',
             isGameFinished: true,
+            isLevelComplete: true, // All blocks used and all words correct = level complete
             player: newState.player,
             wordsFound: newState.discoveredWords.length,
             totalWords: newState.targetWords.length,
-            timeLeft: newState.timeRemaining
+            timeLeft: newState.timeRemaining,
+            level: newState.level
           };
         }
       }
@@ -433,10 +515,12 @@ export const useGameLogic = (category: string) => {
         success: true,
         message: 'Word grouped!',
         isGameFinished: newState.gameStatus === 'finished',
+        isLevelComplete: newState.gameStatus === 'finished' && newState.discoveredWords.length === newState.targetWords.length,
         player: newState.player,
         wordsFound: newState.discoveredWords.length,
         totalWords: newState.targetWords.length,
-        timeLeft: newState.timeRemaining
+        timeLeft: newState.timeRemaining,
+        level: newState.level
       };
     } catch (error) {
       console.error('Error in groupWord:', error);
@@ -640,6 +724,7 @@ export const useGameLogic = (category: string) => {
     resetWord,
     startGame,
     restartGame,
+    startNextLevel,
     validateWord,
     validateAllGroupedWords,
     checkGameCompletion,

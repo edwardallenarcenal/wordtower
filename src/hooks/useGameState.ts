@@ -18,19 +18,15 @@ const INITIAL_STATE: GameState = {
   currentWord: {
     blocks: [],
     isValid: false
-  }
+  },
+  level: 1,
+  wordsPerLevel: 3
 };
 
 export const useGameState = (category: string) => {
   const [gameState, setGameState] = useState<GameState>({
     ...INITIAL_STATE,
-    category,
-    timeRemaining: GAME_TIME,
-    player: {
-      id: 'player1',
-      name: 'Player',
-      words: []
-    }
+    category
   });
 
   const addWord = (wordBlocks: Block[]) => {
@@ -69,12 +65,7 @@ export const useGameState = (category: string) => {
   const resetGame = () => {
     setGameState(prev => ({
       ...INITIAL_STATE,
-      category: prev.category,
-      timeRemaining: GAME_TIME,
-      player: {
-        ...prev.player,
-        words: []
-      }
+      category: prev.category
     }));
   };
 

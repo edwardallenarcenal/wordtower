@@ -2,6 +2,7 @@ export type RootStackParamList = {
   Home: undefined;
   Game: {
     category: string;
+    startLevel?: number; // Optional parameter to start at a specific level
   };
   Settings: undefined;
   Results: {
@@ -11,6 +12,7 @@ export type RootStackParamList = {
     totalWords: number;
     timeLeft: number;
     level: number;
+    isLevelComplete: boolean; // true if level completed, false if time ran out
   };
 };
 

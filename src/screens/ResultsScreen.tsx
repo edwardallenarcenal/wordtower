@@ -13,8 +13,14 @@ type Props = {
 };
 
 export default function ResultsScreen({ navigation, route }: Props) {
-  const { player, category, wordsFound, totalWords, timeLeft, level } = route.params;
+  const { player, category, wordsFound, totalWords, timeLeft, level, isLevelComplete } = route.params;
   const isSuccess = wordsFound === totalWords;
+
+  console.log('=== RESULTS SCREEN DEBUG ===');
+  console.log('Route params:', route.params);
+  console.log('isLevelComplete:', isLevelComplete);
+  console.log('isSuccess:', isSuccess);
+  console.log('Words found/total:', wordsFound, '/', totalWords);
 
   useEffect(() => {
     // Play appropriate sound when results screen loads
@@ -29,6 +35,14 @@ export default function ResultsScreen({ navigation, route }: Props) {
     audioService.playSoundEffect('buttonClick');
     navigation.replace('Game', {
       category
+    });
+  };
+
+  const handleNextLevel = () => {
+    audioService.playSoundEffect('buttonClick');
+    navigation.replace('Game', {
+      category,
+      startLevel: level + 1 // Pass the next level to start at
     });
   };
 
@@ -87,19 +101,41 @@ export default function ResultsScreen({ navigation, route }: Props) {
         </ScrollView>
 
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={[styles.button, styles.playAgainButton]}
-            onPress={handlePlayAgain}
-          >
-            <Text style={styles.buttonText}>Play Again</Text>
-          </TouchableOpacity>
+          {isLevelComplete ? (
+            // Level completed - show Next Level and Home buttons
+            <>
+              <TouchableOpacity 
+                style={[styles.button, styles.nextLevelButton]}
+                onPress={handleNextLevel}
+              >
+                <Text style={styles.buttonText}>Next Level</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.button}
-            onPress={handleGoHome}
-          >
-            <Text style={styles.buttonText}>Home</Text>
-          </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.button}
+                onPress={handleGoHome}
+              >
+                <Text style={styles.buttonText}>Home</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            // Time ran out - show Play Again and Home buttons
+            <>
+              <TouchableOpacity 
+                style={[styles.button, styles.playAgainButton]}
+                onPress={handlePlayAgain}
+              >
+                <Text style={styles.buttonText}>Try Again</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.button}
+                onPress={handleGoHome}
+              >
+                <Text style={styles.buttonText}>Home</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </LinearGradient>
     </View>
@@ -240,6 +276,9 @@ const styles = StyleSheet.create({
   },
   playAgainButton: {
     backgroundColor: COLORS.secondary,
+  },
+  nextLevelButton: {
+    backgroundColor: COLORS.success,
   },
   buttonText: {
     color: COLORS.background,

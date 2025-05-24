@@ -35,7 +35,7 @@ type Props = {
 };
 
 export default function GameScreen({ navigation, route }: Props) {
-  const { category } = route.params;
+  const { category, startLevel } = route.params;
   const { 
     gameState, 
     selectBlock, 
@@ -43,8 +43,9 @@ export default function GameScreen({ navigation, route }: Props) {
     resetWord,
     startGame,
     ungroupWord,
-    getHint
-  } = useGameLogic(category);
+    getHint,
+    startNextLevel
+  } = useGameLogic(category, startLevel);
 
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
@@ -605,6 +606,11 @@ export default function GameScreen({ navigation, route }: Props) {
       }
 
       if (result.isGameFinished) {
+        console.log('=== GAME FINISHED - NAVIGATING TO RESULTS ===');
+        console.log('result.isLevelComplete:', result.isLevelComplete);
+        console.log('result.wordsFound:', result.wordsFound);
+        console.log('result.totalWords:', result.totalWords);
+        
         await new Promise(resolve => setTimeout(resolve, 1000));
         navigation.replace('Results', {
           player: result.player,
@@ -612,7 +618,8 @@ export default function GameScreen({ navigation, route }: Props) {
           wordsFound: result.wordsFound,
           totalWords: result.totalWords,
           timeLeft: result.timeLeft,
-          level: gameState.level
+          level: gameState.level,
+          isLevelComplete: result.isLevelComplete || false
         });
       }
     } else {
@@ -728,7 +735,8 @@ export default function GameScreen({ navigation, route }: Props) {
           wordsFound: gameState.discoveredWords.length,
           totalWords: gameState.targetWords.length,
           timeLeft: 0,
-          level: gameState.level
+          level: gameState.level,
+          isLevelComplete: false // Time ran out, so level wasn't completed
         });
       }, 1000);
     }
