@@ -20,7 +20,6 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
@@ -28,6 +27,8 @@ import { COLORS, SIZES, FONTS } from '../constants/theme';
 import { LetterBlock } from '../components/LetterBlock';
 import { useGameLogic } from '../hooks/useGameLogic';
 import { audioService } from '../services/audioService';
+import appodealService from '../services/appodealService';
+import { Appodeal } from 'react-native-appodeal';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Game'>;
@@ -496,10 +497,7 @@ export default function GameScreen({ navigation, route }: Props) {
     return (
       <View style={styles.alertOverlay}>
         <Animated.View style={[styles.alertContainer, alertStyle]}>
-          <LinearGradient
-            colors={[COLORS.background, COLORS.block.pink]}
-            style={styles.alertGradient}
-          >
+          <View style={styles.alertGradient}>
             <View style={styles.alertHeader}>
               <Text style={styles.alertTitle}>{customAlert.title}</Text>
             </View>
@@ -533,7 +531,7 @@ export default function GameScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
             )}
-          </LinearGradient>
+          </View>
         </Animated.View>
       </View>
     );
@@ -612,6 +610,20 @@ export default function GameScreen({ navigation, route }: Props) {
         console.log('result.totalWords:', result.totalWords);
         
         await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Show interstitial ad every 3 games completed
+        const shouldShowAd = Math.random() < 0.3; // 30% chance to show ad
+        if (shouldShowAd && appodealService.isReady()) {
+          try {
+            console.log('🎯 Showing interstitial ad after game completion');
+            await appodealService.showInterstitial();
+            // Small delay after ad to ensure smooth transition
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.log('Interstitial ad failed to show:', error);
+          }
+        }
+        
         navigation.replace('Results', {
           player: result.player,
           category: gameState.category,
@@ -673,9 +685,7 @@ export default function GameScreen({ navigation, route }: Props) {
         withDelay(1500, withTiming(0, { duration: 200 }))
       );
     }
-  }, [ungroupWord]);
-
-  // Hint function to highlight one correct word
+  }, [ungroupWord]);  // Regular hint function
   const handleHint = useCallback(() => {
     // Clear any previous hint
     setHintBlockIds([]);
@@ -684,9 +694,12 @@ export default function GameScreen({ navigation, route }: Props) {
     const hint = getHint();
     
     if (!hint) {
-      showCustomAlert(
-        'No Hints Available! 🤔',
-        'No valid words can be formed with the current available blocks. Try ungrouping some words or continue playing!'
+      // If no regular hint available, offer rewarded video hint
+      showCustomConfirm(
+        'No Free Hints Available! 💡',
+        'Watch a short video ad to get a premium hint with multiple word suggestions?',
+        () => handleRewardedHint(),
+        () => {}
       );
       return;
     }
@@ -712,13 +725,93 @@ export default function GameScreen({ navigation, route }: Props) {
       withTiming(1, { duration: 500 }),
       withDelay(3000, withTiming(0, { duration: 300 }))
     );
-
+    
     // Clear hint after 3.5 seconds
     setTimeout(() => {
       setHintBlockIds([]);
       setHintActive(false);
     }, 3500);
-  }, [getHint, showCustomAlert]);
+  }, [getHint, showCustomConfirm]);
+
+  // Rewarded video hint function
+  const handleRewardedHint = useCallback(async () => {
+    try {
+      console.log('🎬 Attempting to show rewarded video for hint...');
+      
+      // Check if rewarded video is available
+      if (!appodealService.isReady() || !await appodealService.isAdLoaded('rewarded')) {
+        showCustomAlert(
+          'Ad Not Available 😔',
+          'Sorry, no video ads are available right now. Please try again later!'
+        );
+        return;
+      }
+
+      // Set up reward listener
+      const rewardListener = (reward: any) => {
+        console.log('🎁 Rewarded video completed, showing premium hints');
+        
+        // Get multiple hints (premium feature)
+        const allHints: Array<{word: string, blockIds: string[]}> = [];
+        const maxHints = Math.min(3, gameState.targetWords.length - gameState.discoveredWords.length);
+        
+        for (let i = 0; i < maxHints; i++) {
+          const hint = getHint();
+          if (hint && !allHints.some(h => h.word === hint.word)) {
+            allHints.push(hint);
+          }
+        }
+
+        if (allHints.length > 0) {
+          const hintText = allHints.map(h => `• ${h.word.toUpperCase()}`).join('\n');
+          showCustomAlert(
+            '🎁 Premium Hints Unlocked!',
+            `Here are ${allHints.length} word suggestions:\n\n${hintText}\n\nThanks for watching! ✨`
+          );
+          
+          // Highlight the first hint's blocks
+          setHintBlockIds(allHints[0].blockIds);
+          setHintActive(true);
+          
+          // Clear hint highlighting after 5 seconds (longer for premium)
+          setTimeout(() => {
+            setHintBlockIds([]);
+            setHintActive(false);
+          }, 5000);
+        } else {
+          showCustomAlert(
+            'All Words Found! 🎉',
+            'Congratulations! You\'ve discovered all possible words. Great job!'
+          );
+        }
+        
+        // Remove the listener after use
+        Appodeal.removeEventListener('onRewardedVideoFinished', rewardListener);
+      };
+
+      // Add reward listener
+      Appodeal.addEventListener('onRewardedVideoFinished', rewardListener);
+      
+      // Show rewarded video
+      const success = await appodealService.showRewardedVideo();
+      
+      if (!success) {
+        // Remove listener if ad failed to show
+        Appodeal.removeEventListener('onRewardedVideoFinished', rewardListener);
+        showCustomAlert(
+          'Ad Not Ready 😔',
+          'The rewarded video is not ready yet. Please try again in a moment!'
+        );
+      }
+      
+    } catch (error) {
+      console.error('❌ Error showing rewarded hint video:', error);
+      showCustomAlert(
+        'Ad Error 😔',
+        'Sorry, there was an issue loading the video ad. Please try again later!'
+      );
+    }
+  }, [getHint, gameState.targetWords.length, gameState.discoveredWords.length, showCustomAlert]);
 
   // Start the game when component mounts
   useEffect(() => {
@@ -728,7 +821,19 @@ export default function GameScreen({ navigation, route }: Props) {
   // Navigate to results when timer reaches zero
   useEffect(() => {
     if (gameState.timeRemaining === 0 && gameState.gameStatus === 'finished') {
-      setTimeout(() => {
+      setTimeout(async () => {
+        // Show interstitial ad when time runs out (less frequently)
+        const shouldShowAd = Math.random() < 0.2; // 20% chance when time runs out
+        if (shouldShowAd && appodealService.isReady()) {
+          try {
+            console.log('🎯 Showing interstitial ad after time out');
+            await appodealService.showInterstitial();
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.log('Interstitial ad failed to show:', error);
+          }
+        }
+        
         navigation.replace('Results', {
           player: gameState.player,
           category: gameState.category,
@@ -838,10 +943,7 @@ export default function GameScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={containerStyle}>
-      <LinearGradient
-        colors={[COLORS.background, COLORS.block.blue]}
-        style={styles.gradient}
-      >
+      <View style={styles.gradient}>
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.homeButton}
@@ -854,25 +956,28 @@ export default function GameScreen({ navigation, route }: Props) {
               );
             }}
           >
-            <Text style={styles.homeButtonText}>⌂</Text>
+            <View style={styles.homeButtonGradient}>
+              <Text style={styles.homeButtonText}>⌂</Text>
+            </View>
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <View style={styles.gameInfoContainer}>
-              <Text style={styles.categoryText}>Category: {category}</Text>
+              <Text style={styles.categoryText}>🎯 {category.charAt(0).toUpperCase() + category.slice(1)}</Text>
               <View style={styles.levelContainer}>
-                <Text style={styles.levelText}>Level {gameState.level}</Text>
+                <Text style={styles.levelText}>🏆 Level {gameState.level}</Text>
                 <Text style={styles.levelProgressText}>
                   {gameState.discoveredWords.length}/{gameState.wordsPerLevel} words
                 </Text>
               </View>
             </View>
             <View style={styles.timerContainer}>
+              <Text style={styles.timerLabel}>⏱️ Time</Text>
               <Animated.Text style={[
                 styles.timerText, 
                 gameState.timeRemaining < 30 ? styles.timerWarning : {},
                 gameState.timeRemaining <= 30 ? timerStyle : {}
               ]}>
-                Time: {Math.floor(gameState.timeRemaining / 60)}:
+                {Math.floor(gameState.timeRemaining / 60)}:
                 {(gameState.timeRemaining % 60).toString().padStart(2, '0')}
               </Animated.Text>
             </View>
@@ -903,10 +1008,7 @@ export default function GameScreen({ navigation, route }: Props) {
               </Text>
             </View>
             <Animated.View style={[styles.validationFeedback, validationStyle]}>
-              <Text style={[
-                styles.validationText,
-                { color: feedbackType === 'success' ? COLORS.text : '#FFF' }
-              ]}>
+              <Text style={styles.validationText}>
                 {feedbackMessage}
               </Text>
             </Animated.View>
@@ -951,7 +1053,7 @@ export default function GameScreen({ navigation, route }: Props) {
         
         {/* Custom Alert */}
         {renderCustomAlert()}
-      </LinearGradient>
+      </View>
     </SafeAreaView>
   );
 }
@@ -978,27 +1080,22 @@ const styles = StyleSheet.create({
     marginLeft: SIZES.padding,
   },
   homeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    ...SIZES.shadowMedium,
+  },
+  homeButtonGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    backgroundColor: COLORS.primary,
   },
   homeButtonText: {
     fontSize: SIZES.xLarge,
-    color: COLORS.primary,
+    color: COLORS.white,
     fontFamily: FONTS.bold,
   },
   categoryText: {
@@ -1010,39 +1107,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   levelContainer: {
-    backgroundColor: COLORS.block.purple,
-    paddingHorizontal: SIZES.padding / 2,
-    paddingVertical: SIZES.padding / 4,
-    borderRadius: SIZES.radius / 2,
-    marginTop: 4,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding / 2,
+    borderRadius: SIZES.radius,
+    marginTop: 8,
     alignSelf: 'flex-start',
+    overflow: 'hidden',
+    backgroundColor: COLORS.secondary,
+    ...SIZES.shadowSmall,
   },
   levelText: {
     fontSize: SIZES.medium,
     fontFamily: FONTS.bold,
-    color: COLORS.background,
+    color: COLORS.text,
     textAlign: 'center',
   },
   levelProgressText: {
     fontSize: SIZES.small,
     fontFamily: FONTS.medium,
-    color: COLORS.background,
+    color: COLORS.text,
     textAlign: 'center',
     marginTop: 2,
+    opacity: 0.7,
   },
   gameArea: {
     flex: 1,
     padding: SIZES.padding,
   },
   wordsFound: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.block.mint,
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
     minHeight: 160,
     maxHeight: 280,
-    borderWidth: 1,
-    borderColor: COLORS.block.pink,
+    borderWidth: 2,
+    borderColor: COLORS.secondary,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1130,12 +1230,14 @@ const styles = StyleSheet.create({
   },
   currentWordArea: {
     minHeight: 80,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.block.yellow,
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
     justifyContent: 'center',
     position: 'relative',
+    borderWidth: 2,
+    borderColor: COLORS.warning,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1163,9 +1265,11 @@ const styles = StyleSheet.create({
   },
   blocksArea: {
     flex: 0.6,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.block.blue,
     borderRadius: SIZES.radius,
     padding: SIZES.padding / 2,
+    borderWidth: 2,
+    borderColor: COLORS.info,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1204,7 +1308,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: SIZES.medium,
-    fontFamily: FONTS.medium,
+    fontFamily: FONTS.bold,
     color: COLORS.text,
   },
   validationFeedback: {
@@ -1216,20 +1320,29 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
   },
   validationText: {
-    color: COLORS.success,
+    color: COLORS.text,
     fontSize: SIZES.medium,
     fontFamily: FONTS.bold,
   },
   timerContainer: {
-    backgroundColor: COLORS.background,
-    padding: SIZES.padding / 2,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding / 2,
     borderRadius: SIZES.radius,
-    minWidth: 80,
+    minWidth: 100,
     alignItems: 'center',
+    overflow: 'hidden',
+    backgroundColor: COLORS.accent,
+    ...SIZES.shadowSmall,
+  },
+  timerLabel: {
+    fontSize: SIZES.small,
+    fontFamily: FONTS.medium,
+    color: COLORS.text,
+    marginBottom: 2,
   },
   timerText: {
-    fontSize: SIZES.medium,
-    fontFamily: FONTS.medium,
+    fontSize: SIZES.large,
+    fontFamily: FONTS.bold,
     color: COLORS.text,
   },
   timerWarning: {
@@ -1240,13 +1353,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
     padding: 6,
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: COLORS.block.lavender,
     borderRadius: SIZES.radius,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
   },
   instructionText: {
     fontSize: SIZES.small,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.medium,
     color: COLORS.text,
     textAlign: 'center',
   },
@@ -1350,7 +1465,9 @@ const styles = StyleSheet.create({
     }),
   },
   alertGradient: {
+    backgroundColor: COLORS.background,
     padding: SIZES.padding * 1.5,
+    borderRadius: SIZES.radius,
   },
   alertHeader: {
     alignItems: 'center',

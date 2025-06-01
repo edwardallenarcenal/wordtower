@@ -9,6 +9,7 @@ A fun and engaging word puzzle game built with React Native and Expo where playe
 - **Timed Gameplay**: 3-minute rounds for exciting gameplay
 - **Beautiful UI**: Modern, colorful design with smooth animations
 - **Audio Experience**: Background music and sound effects for immersive gameplay
+- **Monetization**: Integrated ad system with Appodeal SDK
 - **Cross-Platform**: Works on iOS, Android, and Web
 
 ## 🎵 Audio Features
@@ -22,6 +23,14 @@ A fun and engaging word puzzle game built with React Native and Expo where playe
   - Game completion fanfare
 - **Audio Controls**: Volume settings and enable/disable options
 - **Graceful Fallback**: Game works perfectly even without audio files
+
+## 💰 Monetization Features
+
+- **Banner Ads**: Non-intrusive banner ads on home and results screens
+- **Interstitial Ads**: Full-screen ads between game sessions
+- **Rewarded Videos**: Optional ads for extra hints and time
+- **Development Mode**: Simulation mode for testing without real ads
+- **GDPR Compliance**: User consent management for ads
 
 ## 🎨 App Design
 

@@ -8,13 +8,13 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { COLORS, SIZES, FONTS } from '../constants/theme';
 import { CategoryCard } from '../components/CategoryCard';
 import { CATEGORIES } from '../services/categories';
 import { audioService } from '../services/audioService';
+import appodealService from '../services/appodealService';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -26,6 +26,24 @@ export default function HomeScreen({ navigation }: Props) {
   useEffect(() => {
     // Start background music when home screen loads
     audioService.playBackgroundMusic();
+    
+    // Show banner ad at bottom of home screen
+    const showBannerAd = async () => {
+      try {
+        if (appodealService.isReady()) {
+          await appodealService.showBanner('bottom');
+        }
+      } catch (error) {
+        console.log('Banner ad failed to show:', error);
+      }
+    };
+    
+    showBannerAd();
+    
+    // Cleanup banner when leaving screen
+    return () => {
+      appodealService.hideBanner();
+    };
   }, []);
 
   const handleCategorySelect = (category: string) => {
@@ -42,24 +60,25 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={[COLORS.background, COLORS.block.pink]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradient}
-      >
+      <View style={styles.gradient}>
         <View style={styles.header}>
-          <Text style={styles.title}>Word Tower</Text>
-          <Text style={styles.subtitle}>Find all words before time runs out!</Text>
+          <Text style={styles.title}>🏗️ Word Tower</Text>
+          <Text style={styles.subtitle}>Build words, level up, conquer challenges!</Text>
         </View>
 
         <View style={styles.gameInfoSection}>
-          <Text style={styles.gameInfoText}>
-            You have 3 minutes to group all words in the category.
-          </Text>
-          <Text style={styles.gameInfoText}>
-            Win by finding and grouping all target words!
-          </Text>
+          <View style={styles.infoCard}>
+            <Text style={styles.gameInfoTitle}>🎯 Mission</Text>
+            <Text style={styles.gameInfoText}>
+              Find and group all target words in each level before time runs out!
+            </Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.gameInfoTitle}>⏱️ Challenge</Text>
+            <Text style={styles.gameInfoText}>
+              Complete levels to unlock more words and tougher challenges!
+            </Text>
+          </View>
         </View>
 
         <View style={styles.categoriesSection}>
@@ -88,16 +107,11 @@ export default function HomeScreen({ navigation }: Props) {
           disabled={!selectedCategory}
           onPress={handleStartGame}
         >
-          <LinearGradient
-            colors={[COLORS.secondary, COLORS.block.blue]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.startButtonGradient}
-          >
+          <View style={styles.startButtonGradient}>
             <Text style={styles.startButtonText}>Start Game!</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
     </SafeAreaView>
   );
 }
@@ -109,6 +123,7 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.primary,
   },
   header: {
     alignItems: 'center',
@@ -184,10 +199,24 @@ const styles = StyleSheet.create({
   startButtonGradient: {
     padding: SIZES.padding,
     alignItems: 'center',
+    backgroundColor: COLORS.secondary,
   },
   startButtonText: {
     fontSize: SIZES.large,
     fontFamily: FONTS.bold,
     color: COLORS.text,
+  },
+  infoCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: SIZES.marginSmall,
+    ...SIZES.shadowSmall,
+  },
+  gameInfoTitle: {
+    fontSize: SIZES.large,
+    fontFamily: FONTS.medium,
+    color: COLORS.primary,
+    marginBottom: SIZES.marginSmall,
   },
 });

@@ -6,7 +6,6 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -51,11 +50,8 @@ export const CategoryCard = React.memo(({
   return (
     <Pressable onPress={handlePress}>
       <Animated.View style={[styles.container, animatedStyle, isSelected && styles.selected]}>
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.block.pink]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradient}
+        <View
+          style={[styles.gradient, {backgroundColor: COLORS.primary}]}
         >
           <View style={styles.content}>
             <Text style={styles.name}>{name}</Text>
@@ -66,7 +62,7 @@ export const CategoryCard = React.memo(({
               </View>
             )}
           </View>
-        </LinearGradient>
+        </View>
       </Animated.View>
     </Pressable>
   );

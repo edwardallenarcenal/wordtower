@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../types';
 import { COLORS, SIZES, FONTS } from '../constants/theme';
 import { audioService } from '../services/audioService';
+import appodealService from '../services/appodealService';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Results'>;
@@ -31,6 +31,25 @@ export default function ResultsScreen({ navigation, route }: Props) {
     }
   }, [isSuccess]);
 
+  // Show banner ad when results screen loads
+  useEffect(() => {
+    const showBanner = async () => {
+      try {
+        console.log('📄 ResultsScreen: Showing banner ad...');
+        await appodealService.showBanner('bottom');
+      } catch (error) {
+        console.log('❌ ResultsScreen: Failed to show banner:', error);
+      }
+    };
+
+    showBanner();
+
+    // Cleanup: hide banner when component unmounts
+    return () => {
+      appodealService.hideBanner().catch(console.error);
+    };
+  }, []);
+
   const handlePlayAgain = () => {
     audioService.playSoundEffect('buttonClick');
     navigation.replace('Game', {
@@ -53,91 +72,123 @@ export default function ResultsScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[COLORS.background, isSuccess ? COLORS.block.green : COLORS.block.orange]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradient}
-      >
-        <Text style={styles.title}>{isSuccess ? 'Success!' : 'Game Over!'}</Text>
-        <Text style={styles.categoryText}>Category: {category}</Text>
-        
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={[styles.playerCard, isSuccess && styles.winnerCard]}>
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Level Reached:</Text>
-                <Text style={styles.statValue}>{level}</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Words Found:</Text>
-                <Text style={styles.statValue}>{wordsFound}/{totalWords}</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Time Left:</Text>
-                <Text style={styles.statValue}>
-                  {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-                </Text>
+      <View style={[styles.headerBackground, {backgroundColor: isSuccess ? COLORS.success : COLORS.error}]}>
+        <View style={styles.content}>
+          <Text style={styles.title}>
+            {isLevelComplete ? '🎉 Level Complete!' : '⏰ Time\'s Up!'}
+          </Text>
+          <Text style={styles.categoryText}>
+            {category.charAt(0).toUpperCase() + category.slice(1)} - Level {level}
+          </Text>
+          
+          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.achievementHeader}>
+              <View style={[styles.statsCard, {backgroundColor: COLORS.white}]}>
+                <Text style={styles.statsTitle}>📊 Game Stats</Text>
+                
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>Words Found:</Text>
+                  <Text style={[styles.statValue, {color: COLORS.success}]}>
+                    {wordsFound} / {totalWords}
+                  </Text>
+                </View>
+                
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>Time Remaining:</Text>
+                  <Text style={[styles.statValue, {color: timeLeft > 30 ? COLORS.success : COLORS.error}]}>
+                    {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                  </Text>
+                </View>
+                
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>Completion:</Text>
+                  <Text style={[styles.statValue, {color: isSuccess ? COLORS.success : COLORS.warning}]}>
+                    {Math.round((wordsFound / totalWords) * 100)}%
+                  </Text>
+                </View>
+
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>Score:</Text>
+                  <Text style={[styles.statValue, {color: COLORS.primary}]}>
+                    {((player?.words?.length || 0) * 100).toLocaleString()}
+                  </Text>
+                </View>
               </View>
             </View>
-            <View style={styles.wordsContainer}>
-              <Text style={styles.wordsTitle}>Words Grouped:</Text>
-              <View style={styles.wordsList}>
-                {player.words.map((word) => (
-                  <View key={word.id} style={styles.wordItem}>
-                    <Text style={styles.wordText}>{word.word}</Text>
-                    <View style={styles.letterBlocks}>
-                      {word.blocks.map((block, index) => (
-                        <View key={index} style={styles.miniBlock}>
-                          <Text style={styles.miniBlockText}>{block.letter}</Text>
-                        </View>
-                      ))}
+
+            {player?.words && player.words.length > 0 && (
+              <View style={styles.wordsSection}>
+                <View style={[styles.wordsSectionHeader, {backgroundColor: COLORS.accent}]}>
+                  <Text style={styles.wordsSectionTitle}>🎯 Words Collected</Text>
+                </View>
+                <View style={styles.wordsGrid}>
+                  {(player?.words || []).map((word) => (
+                    <View
+                      key={word.id}
+                      style={[styles.wordCard, {backgroundColor: COLORS.block.pink}]}
+                    >
+                      <Text style={styles.wordCardText}>{word.word.toUpperCase()}</Text>
+                      <View style={styles.wordCardBlocks}>
+                        {word.blocks.map((block, index) => (
+                          <View key={index} style={styles.miniBlock}>
+                            <Text style={styles.miniBlockText}>{block.letter}</Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
+          </ScrollView>
+
+          <View style={styles.buttonContainer}>
+            {isLevelComplete ? (
+              // Level completed - show Next Level and Home buttons
+              <>
+                <TouchableOpacity 
+                  style={styles.button}
+                  onPress={handleNextLevel}
+                >
+                  <View style={[styles.buttonBackground, {backgroundColor: COLORS.success}]}>
+                    <Text style={styles.buttonText}>🚀 Next Level</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.button}
+                  onPress={handleGoHome}
+                >
+                  <View style={[styles.buttonBackground, {backgroundColor: COLORS.primary}]}>
+                    <Text style={styles.buttonText}>🏠 Home</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // Time ran out - show Play Again and Home buttons
+              <>
+                <TouchableOpacity 
+                  style={styles.button}
+                  onPress={handlePlayAgain}
+                >
+                  <View style={[styles.buttonBackground, {backgroundColor: COLORS.secondary}]}>
+                    <Text style={styles.buttonText}>🔄 Try Again</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.button}
+                  onPress={handleGoHome}
+                >
+                  <View style={[styles.buttonBackground, {backgroundColor: COLORS.primary}]}>
+                    <Text style={styles.buttonText}>🏠 Home</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-        </ScrollView>
-
-        <View style={styles.buttonContainer}>
-          {isLevelComplete ? (
-            // Level completed - show Next Level and Home buttons
-            <>
-              <TouchableOpacity 
-                style={[styles.button, styles.nextLevelButton]}
-                onPress={handleNextLevel}
-              >
-                <Text style={styles.buttonText}>Next Level</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.button}
-                onPress={handleGoHome}
-              >
-                <Text style={styles.buttonText}>Home</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            // Time ran out - show Play Again and Home buttons
-            <>
-              <TouchableOpacity 
-                style={[styles.button, styles.playAgainButton]}
-                onPress={handlePlayAgain}
-              >
-                <Text style={styles.buttonText}>Try Again</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.button}
-                onPress={handleGoHome}
-              >
-                <Text style={styles.buttonText}>Home</Text>
-              </TouchableOpacity>
-            </>
-          )}
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 }
@@ -147,120 +198,115 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  gradient: {
+  headerBackground: {
+    flex: 1,
+    minHeight: '100%',
+  },
+  content: {
     flex: 1,
     padding: SIZES.padding,
   },
   title: {
     fontSize: SIZES.xxLarge,
     fontFamily: FONTS.bold,
-    color: COLORS.text,
+    color: COLORS.white,
     textAlign: 'center',
     marginVertical: SIZES.margin,
   },
   categoryText: {
     fontSize: SIZES.large,
     fontFamily: FONTS.medium,
-    color: COLORS.text,
+    color: COLORS.white,
     textAlign: 'center',
     marginBottom: SIZES.margin * 2,
+    opacity: 0.9,
   },
-  content: {
+  scrollContent: {
     flex: 1,
   },
-  playerCard: {
-    backgroundColor: COLORS.background,
+  achievementHeader: {
+    marginBottom: SIZES.margin,
+  },
+  statsCard: {
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     marginBottom: SIZES.margin,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    ...SIZES.shadowMedium,
   },
-  winnerCard: {
-    backgroundColor: COLORS.block.green,
-    borderColor: COLORS.success,
-    borderWidth: 2,
+  statsTitle: {
+    fontSize: SIZES.large,
+    fontFamily: FONTS.bold,
+    color: COLORS.text,
+    marginBottom: SIZES.margin,
+    textAlign: 'center',
   },
-  statsContainer: {
+  statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.background,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.padding,
-    padding: SIZES.padding,
-  },
-  statItem: {
     alignItems: 'center',
-    padding: SIZES.padding / 2,
+    marginBottom: SIZES.margin / 2,
   },
   statLabel: {
     fontSize: SIZES.medium,
     fontFamily: FONTS.medium,
     color: COLORS.text,
-    marginBottom: SIZES.padding / 4,
   },
   statValue: {
+    fontSize: SIZES.medium,
+    fontFamily: FONTS.bold,
+  },
+  wordsSection: {
+    marginBottom: SIZES.margin * 2,
+  },
+  wordsSectionHeader: {
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding / 2,
+    marginBottom: SIZES.margin,
+    alignItems: 'center',
+    ...SIZES.shadowSmall,
+  },
+  wordsSectionTitle: {
     fontSize: SIZES.large,
     fontFamily: FONTS.bold,
-    color: COLORS.primary,
+    color: COLORS.white,
   },
-  wordsContainer: {
-    backgroundColor: COLORS.lightGray,
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-  },
-  wordsTitle: {
-    fontSize: SIZES.medium,
-    fontFamily: FONTS.medium,
-    color: COLORS.text,
-    marginBottom: SIZES.padding / 2,
-  },
-  wordsList: {
-    gap: SIZES.padding / 2,
-  },
-  wordItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    padding: SIZES.padding / 2,
-    borderRadius: SIZES.radius / 2,
-  },
-  wordText: {
-    fontSize: SIZES.medium,
-    fontFamily: FONTS.regular,
-    color: COLORS.text,
-  },
-  letterBlocks: {
+  wordsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  wordCard: {
+    width: '48%',
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding / 2,
+    marginBottom: SIZES.margin / 2,
+    alignItems: 'center',
+    ...SIZES.shadowSmall,
+  },
+  wordCardText: {
+    fontSize: SIZES.medium,
+    fontFamily: FONTS.bold,
+    color: COLORS.white,
+    marginBottom: SIZES.margin / 4,
+  },
+  wordCardBlocks: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 4,
-    gap: 2,
+    flexWrap: 'wrap',
   },
   miniBlock: {
     width: 20,
     height: 20,
-    backgroundColor: COLORS.block.blue,
+    backgroundColor: COLORS.white,
     borderRadius: 4,
+    margin: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 1,
   },
   miniBlockText: {
-    fontSize: SIZES.xSmall,
+    fontSize: 10,
     fontFamily: FONTS.bold,
-    color: COLORS.background,
-    textAlign: 'center',
+    color: COLORS.text,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -269,21 +315,20 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    backgroundColor: COLORS.primary,
-    padding: SIZES.padding,
     borderRadius: SIZES.radius,
     marginHorizontal: SIZES.margin / 2,
+    overflow: 'hidden',
+    ...SIZES.shadowMedium,
   },
-  playAgainButton: {
-    backgroundColor: COLORS.secondary,
-  },
-  nextLevelButton: {
-    backgroundColor: COLORS.success,
+  buttonBackground: {
+    padding: SIZES.padding,
+    alignItems: 'center',
+    borderRadius: SIZES.radius,
   },
   buttonText: {
-    color: COLORS.background,
     fontSize: SIZES.medium,
-    fontFamily: FONTS.medium,
+    fontFamily: FONTS.bold,
+    color: COLORS.white,
     textAlign: 'center',
   },
 });

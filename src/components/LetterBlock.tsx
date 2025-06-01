@@ -10,6 +10,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   useSharedValue,
+  withTiming,
+  interpolateColor,
 } from 'react-native-reanimated';
 import { COLORS, FONTS, SIZES } from '../constants/theme';
 
@@ -19,6 +21,7 @@ interface LetterBlockProps {
   onPress?: () => void;
   style?: ViewStyle;
   colorIndex?: number;
+  isHint?: boolean;
 }
 
 export const LetterBlock = React.memo(({ 
@@ -27,31 +30,51 @@ export const LetterBlock = React.memo(({
   onPress, 
   style,
   colorIndex = 0,
+  isHint = false,
 }: LetterBlockProps) => {
   const blockColors = Object.values(COLORS.block);
-  const backgroundColor = blockColors[colorIndex % blockColors.length];
+  const primaryColor = blockColors[colorIndex % blockColors.length];
   
   const scale = useSharedValue(1);
   const pressed = useSharedValue(false);
+  const hintPulse = useSharedValue(0);
+
+  // Start hint animation if isHint is true
+  React.useEffect(() => {
+    if (isHint) {
+      hintPulse.value = withTiming(1, { duration: 500 });
+    } else {
+      hintPulse.value = withTiming(0, { duration: 300 });
+    }
+  }, [isHint]);
 
   const animatedStyle = useAnimatedStyle(() => {
+    const hintScale = 1 + (hintPulse.value * 0.1);
+    const baseScale = isSelected ? 0.95 : scale.value;
+    
     return {
       transform: [
-        { scale: withSpring(isSelected ? 0.95 : scale.value, { 
+        { scale: withSpring(baseScale * hintScale, { 
           damping: 12,
           stiffness: 120,
         })},
-        { translateY: withSpring(isSelected ? -10 : 0, {
+        { translateY: withSpring(isSelected ? -8 : 0, {
           damping: 12,
           stiffness: 120,
         })}
       ],
-      // No opacity change on selection - keeping opacity the same
+      shadowOpacity: withSpring(isSelected ? 0.3 : 0.15),
+      borderWidth: withSpring(isHint ? 2 : 0),
+      borderColor: interpolateColor(
+        hintPulse.value,
+        [0, 1],
+        ['transparent', COLORS.warning]
+      ),
     };
   });
 
   const onPressIn = () => {
-    scale.value = withSpring(0.95);
+    scale.value = withSpring(0.9);
     pressed.value = true;
   };
 
@@ -71,12 +94,15 @@ export const LetterBlock = React.memo(({
       <Animated.View
         style={[
           styles.container,
-          { backgroundColor },
           animatedStyle,
           style
         ]}
       >
-        <Text style={styles.letter}>{letter}</Text>
+        <Animated.View
+          style={[styles.gradient, {backgroundColor: primaryColor}]}
+        >
+          <Text style={styles.letter}>{letter}</Text>
+        </Animated.View>
       </Animated.View>
     </Pressable>
   );
@@ -84,28 +110,25 @@ export const LetterBlock = React.memo(({
 
 const styles = StyleSheet.create({
   container: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: SIZES.radius,
+    margin: SIZES.marginSmall / 2,
+    ...SIZES.shadowMedium,
+  },
+  gradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 4,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderRadius: SIZES.radius,
   },
   letter: {
-    color: COLORS.text,
     fontSize: SIZES.xLarge,
     fontFamily: FONTS.bold,
+    color: COLORS.text,
     textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
 });
